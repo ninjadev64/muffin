@@ -1,0 +1,15 @@
+{
+	"name": "muffin-proxy",
+	"version": "1.0.4",
+	"author": "ninjadev64",
+	"license": "MIT",
+	"description": "Muffin is an HTTP proxy written in JavaScript with a new approach.",
+	"main": "index.js",
+	"type": "module",
+	"bin": {
+		"muffin": "index.js"
+	},
+	"dependencies": {
+		"himalaya": "^1.1.0"
+	}
+}
