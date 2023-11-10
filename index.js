@@ -205,11 +205,15 @@ async function requestListener(req, res) {
 	// Prefix all src, srcset, and href attributes with the hostname of the Muffin proxy if the response's content type is HTML.
 	// Otherwise, forward the content as-is to the client.
 	const contentType = resHeaders["content-type"];
-	if (contentType.startsWith("text/html")) {
-		res.write(stringify(recurse(parse(await dat.text()), req.headers.host)));
-	} else {
-		res.write(new Uint8Array(await dat.arrayBuffer()));
+	let tbw = new Uint8Array(await dat.arrayBuffer());
+	if (contentType && contentType.startsWith("text/html")) {
+		try {
+			tbw = stringify(recurse(parse(await dat.text()), req.headers.host));
+		} catch {
+			res.write("Muffins may not have fully baked (failed to parse the requested HTML document, raw contents returned)");
+		}
 	}
+	res.write(tbw);
 
 	// Conclude the returned response.
 	res.end();
