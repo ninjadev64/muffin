@@ -37,6 +37,30 @@ const desiredResHeaders = [
 	"content-type"
 ];
 
+// CSS to apply to Muffin configuration and error pages.
+const styles = `
+@import url("https://fonts.googleapis.com/css2?family=Roboto&display=swap");
+
+* {
+	text-align: center;
+	margin-left: auto;
+	margin-right: auto;
+	font-family: "Roboto", sans-serif;
+}
+
+input, button {
+	display: block;
+	box-sizing: border-box;
+	width: 24rem;
+	padding: 4px;
+	border-radius: 5px;
+}
+
+.monospace {
+	font-family: monospace;
+}
+`;
+
 /**
  * Recursively iterate through the elements of an HTML document,
  * and prefix all src, srcset, and href attributes
@@ -49,24 +73,27 @@ function recurse(elements, hostname) {
 		let attributes = [];
 		for (let { key, value } of element.attributes ?? []) {
 			key = key.trim().toLowerCase();
-			if (key == "src" || key == "href") {
-				if (value.startsWith("http")) {
-					// If the URL is absolute, use the muffin_proxy route (to allow origins other than the configured one).
-					value = `${scheme}://${hostname}/muffin_proxy/${value}`;
-				} else {
-					// Otherwise, continue using it as a path relative to the configured origin.
-					value = `${scheme}://${hostname}/${value}`;
-				}
-			} else if (key == "srcset") {
-				let sections = value.split(",");
-				for (const [ index, section ] of sections.entries()) {
-					if (section.startsWith("http")) {
-						sections[index] = `${scheme}://${hostname}/muffin_proxy/${section.trim()}`;
+			if (value) {
+				if (key == "src" || key == "href") {
+					if (value.startsWith("http")) {
+						// If the URL is absolute, use the muffin_proxy route (to allow origins other than the configured one).
+						value = `${scheme}://${hostname}/muffin_proxy/${value}`;
 					} else {
-						sections[index] = `${scheme}://${hostname}/${section.trim()}`;
+						// Otherwise, continue using it as a path relative to the configured origin.
+						value = `${scheme}://${hostname}${value.startsWith("/") ? "" : "/"}${value}`;
 					}
+				} else if (key == "srcset") {
+					let sections = value.split(",");
+					for (let [ index, section ] of sections.entries()) {
+						section = section.trim();
+						if (section.startsWith("http")) {
+							sections[index] = `${scheme}://${hostname}/muffin_proxy/${section}`;
+						} else {
+							sections[index] = `${scheme}://${hostname}${section.startsWith("/") ? "" : "/"}${section}`;
+						}
+					}
+					value = sections.join(", ");
 				}
-				value = sections.join(", ");
 			}
 			attributes.push({ key, value });
 		}
@@ -105,8 +132,20 @@ async function requestListener(req, res) {
 		if (!domain || domain == "/") {
 			res.writeHead(200, { "content-type": "text/html" });
 			res.write(`
-			<input id="origin" placeholder="Domain name" />
-			<button onclick="window.location.replace('/muffin_init/' + document.getElementById('origin').value);"> Go! </button>
+				<!DOCTYPE html>
+				<html lang="en">
+					<head>
+						<style>${styles}</style>
+						<script type="text/javascript">
+							const redirect = () => window.location.replace("/muffin_init/" + document.getElementById("origin").value);
+						</script>
+					</head>
+					<body>
+						<h3> Oven </h3>
+						<input id="origin" placeholder="Domain name / IP address" />
+						<button style="margin-top: 4px;" onclick="redirect()"> Go! </button>
+					</body>
+				</html>
 			`);
 		} else {
 			res.writeHead(302, {
@@ -133,8 +172,28 @@ async function requestListener(req, res) {
 		url = `http://${muffin_origin}${req.url}`;
 	}
 
-	// Request the proxied server with the appropriate parameters.
-	const dat = await fetch(url, { method: req.method, headers: reqHeaders, body: [ "GET", "HEAD" ].includes(req.method) ? undefined : body });
+	let dat;
+	try {
+		// Request the proxied server with the appropriate parameters.
+		dat = await fetch(url, { method: req.method, headers: reqHeaders, body: [ "GET", "HEAD" ].includes(req.method) ? undefined : body });
+	} catch (e) {
+		res.writeHead(400, { "content-type": "text/html" });
+		res.end(`
+			<!DOCTYPE html>
+			<html lang="en">
+				<head>
+					<style>${styles}</style>
+				</head>
+				<body>
+					<h3> Muffins got burnt </h3>
+					<p class="monospace"> ${e.message} </p>
+					<p class="monospace"> ${e.cause.code} ${e.cause.hostname ?? ""} </p>
+					<button style="width: 12rem;" onclick="window.location.replace('/muffin_init');"> Change origin </button>
+				</body>
+			</html>
+		`);
+		return;
+	}
 
 	// Copy the headers to be forwarded to the client.
 	let resHeaders = {};
@@ -157,4 +216,5 @@ async function requestListener(req, res) {
 }
 
 const server = createServer(requestListener);
+server.on("error", (e) => console.error(`Muffins failed to bake:\n${e.message}`));
 server.listen(port, host, () => console.log("Muffins are ready to eat!"));
