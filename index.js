@@ -6,7 +6,7 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 // Configuration options
 let port = 5200;
 let host = "localhost";
-let scheme = "https";
+let scheme = "http";
 for (let [ index, arg ] of process.argv.entries()) {
 	arg = arg.trim().toLowerCase();
 	if (arg == "--port" || arg == "-p") {
@@ -88,8 +88,6 @@ function recurse(elements, hostname) {
 						section = section.trim();
 						if (section.startsWith("http")) {
 							sections[index] = `${scheme}://${hostname}/muffin_proxy/${section}`;
-						} else {
-							sections[index] = `${scheme}://${hostname}${section.startsWith("/") ? "" : "/"}${section}`;
 						}
 					}
 					value = sections.join(", ");
@@ -117,11 +115,11 @@ async function requestListener(req, res) {
 		req.on("data", (chunk) => chunks.push(chunk));
 		req.on("end", () => resolve(Buffer.concat(chunks).toString()));
 	});
-	
+
 	// Copy the headers to be forwarded to the proxied server.
 	let reqHeaders = {};
 	for (const header of desiredReqHeaders) {
-		if (req.headers[header]) reqHeaders[header] = req.headers[header]; 
+		if (req.headers[header]) reqHeaders[header] = req.headers[header];
 	}
 
 	// Check if the user is accessing the muffin_init route or the muffin_proxy route (in order to use an origin other than the configured one).
@@ -198,7 +196,7 @@ async function requestListener(req, res) {
 	// Copy the headers to be forwarded to the client.
 	let resHeaders = {};
 	for (const header of desiredResHeaders) {
-		if (dat.headers.get(header)) resHeaders[header] = dat.headers.get(header); 
+		if (dat.headers.get(header)) resHeaders[header] = dat.headers.get(header);
 	}
 	res.writeHead(dat.status, resHeaders);
 
