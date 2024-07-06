@@ -57,7 +57,7 @@ input, button {
  * with the hostname of the Muffin proxy.
  * @param {object} elements - The JSON representation of the HTML document.
 */
-function recurse(elements: any, origin: string | null): any {
+function recurse(elements: any, host: string | null): any {
 	for (const [ index, element ] of elements.entries()) {
 		let attributes: { key: string, value: string }[] = [];
 		for (let { key, value } of element.attributes ?? []) {
@@ -68,8 +68,8 @@ function recurse(elements: any, origin: string | null): any {
 						value = `/muffin_proxy/${value}`;
 					} else if (value.startsWith("//")) {
 						value = `/muffin_proxy/http:${value}`;
-					} else if (!value.startsWith("data:") && origin) {
-						value = `/muffin_proxy/http://${origin}${value}`;
+					} else if (!value.startsWith("data:") && host) {
+						value = `/muffin_proxy/http://${host}${value}`;
 					}
 				} else if (key == "srcset") {
 					let sections = value.split(",");
@@ -79,8 +79,8 @@ function recurse(elements: any, origin: string | null): any {
 							sections[index] = `/muffin_proxy/${section}`;
 						} else if (section.startsWith("//")) {
 							sections[index] = `/muffin_proxy/http:${section}`;
-						} else if (!section.startsWith("data:") && origin) {
-							sections[index] = `/muffin_proxy/http://${origin}${section}`;
+						} else if (!section.startsWith("data:") && host) {
+							sections[index] = `/muffin_proxy/http://${host}${section}`;
 						}
 					}
 					value = sections.join(", ");
@@ -90,7 +90,7 @@ function recurse(elements: any, origin: string | null): any {
 		}
 		elements[index].attributes = attributes;
 		if (element.children) {
-			elements[index].children = recurse(element.children, origin);
+			elements[index].children = recurse(element.children, host);
 		}
 	}
 	return elements;
@@ -106,7 +106,7 @@ function generateErrorMessage(e: Error): string {
 		<body>
 			<h3> Muffins got burnt </h3>
 			<p style="font-family: monospace;"> ${e.message} </p>
-			<button style="width: 12rem;" onclick="window.location.replace('/muffin_init');"> Change origin </button>
+			<button style="width: 12rem;" onclick="window.location.replace('/muffin_init');"> Change host </button>
 		</body>
 	</html>`;
 }
@@ -116,8 +116,8 @@ function generateErrorMessage(e: Error): string {
  * @param {Request} req
  */
 async function requestHandler(req: Request): Promise<Response> {
-	let origin: { hostname: string, differentToConfigured: boolean };
-	// Check if the user is accessing the muffin_init route or the muffin_proxy route (in order to use an origin other than the configured one).
+	let host: { host: string, differentToConfigured: boolean };
+	// Check if the user is accessing the muffin_init route or the muffin_proxy route (in order to use an host other than the configured one).
 	let url = new URL(req.url).pathname;
 	if (url.startsWith("/muffin_init")) {
 		let domain = decodeURIComponent(url.slice(13));
@@ -129,45 +129,45 @@ async function requestHandler(req: Request): Promise<Response> {
 					<head>
 						<style>${styles}</style>
 						<script type="text/javascript">
-							const redirect = () => window.location.replace("/muffin_init/" + document.getElementById("origin").value);
+							const redirect = () => window.location.replace("/muffin_init/" + document.getElementById("host").value);
 						</script>
 					</head>
 					<body>
 						<h3> Oven </h3>
-						<input id="origin" placeholder="Domain name / IP address" onkeypress="if (event.key == 'Enter') redirect();"/>
+						<input id="host" placeholder="Domain name / IP address" onkeypress="if (event.key == 'Enter') redirect();"/>
 						<button style="margin-top: 4px;" onclick="redirect();"> Go! </button>
 					</body>
 				</html>
 			`;
 			return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
 		} else {
-			// Make a request to the origin in order to determine if it redirects to another origin.
+			// Make a request to the host in order to determine if it redirects to another host.
 			let res = await fetch(`http://${domain}`);
-			if (res.redirected) domain = URL.parse(res.url)?.hostname ?? domain;
+			if (res.redirected) domain = new URL(res.url).host ?? domain;
 			let headers = {
 				"location": `/`,
-				"set-cookie": `muffin_origin=${domain}; Path=/; HttpOnly; SameSite=Lax`
+				"set-cookie": `muffin_host=${domain}; Path=/; HttpOnly; SameSite=Lax`
 			};
 			return new Response(null, { status: 302, headers });
 		}
 	} else if (url.startsWith("/muffin_proxy")) {
-		let u = URL.parse(url.slice(14));
+		let u = new URL(url.slice(14));
 		if (!u) return new Response(generateErrorMessage(new Error("Invalid URL")), { status: 400 });
-		let res = await fetch(`http://${u.hostname}`);
-		if (res.redirected) u.hostname = URL.parse(res.url)?.hostname!;
-		origin = { hostname: u.hostname, differentToConfigured: true };
+		let res = await fetch(`http://${u.host}`);
+		if (res.redirected) u.host = new URL(res.url).host;
+		host = { host: u.host, differentToConfigured: true };
 		url = u.pathname;
 	} else {
-		// If accessing a path relative to the configured origin, parse the cookie header to obtain the configured origin.
-		let cookies = req.headers.get("cookie") ?? "muffin_origin=";
-		const { muffin_origin } = cookies.split(";").map((cookie) => cookie.split("=")).reduce((obj: any, pair) => {
+		// If accessing a path relative to the configured host, parse the cookie header to obtain the configured host.
+		let cookies = req.headers.get("cookie") ?? "muffin_host=";
+		const { muffin_host } = cookies.split(";").map((cookie) => cookie.split("=")).reduce((obj: any, pair) => {
 			obj[decodeURIComponent(pair[0].trim())] = decodeURIComponent(pair[1].trim());
 			return obj;
 		}, {});
-		if (!muffin_origin) {
+		if (!muffin_host) {
 			return new Response(null, { status: 302, headers: { "location": `${scheme}://${req.headers.get("host")}/muffin_init` } });
 		}
-		origin = { hostname: muffin_origin, differentToConfigured: false };
+		host = { host: muffin_host, differentToConfigured: false };
 	}
 
 	let dat;
@@ -178,7 +178,7 @@ async function requestHandler(req: Request): Promise<Response> {
 			if (req.headers.has(header)) reqHeaders[header] = req.headers.get(header);
 		}
 		// Request the proxied server with the appropriate parameters.
-		dat = await fetch(`http://${origin.hostname}${url}`, { method: req.method, headers: reqHeaders, body: [ "GET", "HEAD" ].includes(req.method) ? undefined : await req.blob() });
+		dat = await fetch(`http://${host.host}${url}`, { method: req.method, headers: reqHeaders, body: [ "GET", "HEAD" ].includes(req.method) ? undefined : await req.blob() });
 	} catch (e) {
 		return new Response(generateErrorMessage(e), { status: 400, headers: { "content-type": "text/html" } });
 	}
@@ -189,21 +189,32 @@ async function requestHandler(req: Request): Promise<Response> {
 		if (dat.headers.has(header)) resHeaders[header] = dat.headers.get(header);
 	}
 
+	if ([ 101, 204, 205, 304 ].includes(dat.status)) {
+		return new Response(null, { status: dat.status, headers: resHeaders });
+	}
+
 	// Prefix all src, srcset, href, and action attributes with the hostname of the Muffin proxy if the response's content type is HTML.
 	// Otherwise, forward the content as-is to the client.
 	const contentType = resHeaders["content-type"];
 	let tbw;
 	if (contentType && contentType.startsWith("text/html")) {
 		try {
-			tbw = stringify(recurse(parse(await dat.clone().text()), origin.differentToConfigured ? origin.hostname : null));
+			tbw = stringify(recurse(parse(await dat.clone().text()), host.differentToConfigured ? host.host : null));
 		} catch {
 			tbw = "Muffins are undercooked (failed to parse the requested HTML document, raw contents returned)" + await dat.clone().text();
 		}
 	}
 	if (!tbw) tbw = new Uint8Array(await dat.arrayBuffer());
 
-	if ([ 101, 204, 205, 304 ].includes(dat.status)) {
-		return new Response(null, { status: dat.status, headers: resHeaders });
+	const resultUrl = new URL(dat.url);
+	if (dat.redirected && (resultUrl.host != host.host || resultUrl.pathname != url)) {
+		if (host.differentToConfigured || resultUrl.host != host.host) {
+			resHeaders["location"] = `/muffin_proxy/${dat.url}`;
+		} else {
+			resHeaders["location"] = resultUrl.pathname;
+		}
+		// Status code 307 Temporary Redirect is used to prevent caching redirects across host changes.
+		return new Response(tbw, { status: 307, headers: resHeaders });
 	} else {
 		return new Response(tbw, { status: dat.status, headers: resHeaders });
 	}
