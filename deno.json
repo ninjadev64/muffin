@@ -1,1 +1,11 @@
-{}
+{
+	"fmt": {
+		"useTabs": true,
+		"proseWrap": "never"
+	},
+	"lint": {
+		"rules": {
+			"exclude": ["prefer-const", "no-explicit-any"]
+		}
+	}
+}
