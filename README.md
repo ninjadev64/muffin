@@ -6,10 +6,16 @@ Muffin is not going to provide any privacy or functionality guarantee. Any reque
 
 ## Usage
 
-To run, simply clone this repository and run with [Deno](https://deno.com/).
+To run, simply download the latest artifact for your platform from [GitHub Actions](https://github.com/ninjadev64/muffin/actions/workflows/compile.yaml) and run:
 
 ```
-deno run --allow-net index.ts [(--port || -p) <port>] [(--host || -h) <host>] [(--scheme || -s) <scheme>]
+./muffin-x86_64-unknown-linux-gnu [(--port || -p) <port>] [(--host || -h) <host>] [(--scheme || -s) <scheme>]
+```
+
+You can also clone this repository and run with [Deno](https://deno.com/):
+
+```
+deno run --allow-net index.ts [options]
 ```
 
 You can also produce a native executable:

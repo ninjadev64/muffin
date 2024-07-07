@@ -1,0 +1,61 @@
+name: Compile
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Verify formatting
+        run: deno fmt --check
+
+      - name: Build artifacts
+        run: |
+          deno compile --allow-net --target x86_64-unknown-linux-gnu --output muffin-x86_64-unknown-linux-gnu index.ts
+          deno compile --allow-net --target aarch64-unknown-linux-gnu --output muffin-aarch64-unknown-linux-gnu index.ts
+          deno compile --allow-net --target x86_64-pc-windows-msvc --output muffin-x86_64-pc-windows-msvc.exe index.ts
+          deno compile --allow-net --target x86_64-apple-darwin --output muffin-x86_64-apple-darwin index.ts
+          deno compile --allow-net --target aarch64-apple-darwin --output muffin-aarch64-apple-darwin index.ts
+
+      - name: Upload x86_64-unknown-linux-gnu artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: muffin-x86_64-unknown-linux-gnu
+          path: muffin-x86_64-unknown-linux-gnu
+
+      - name: Upload aarch64-unknown-linux-gnu artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: muffin-aarch64-unknown-linux-gnu
+          path: muffin-aarch64-unknown-linux-gnu
+
+      - name: Upload x86_64-pc-windows-msvc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: muffin-x86_64-pc-windows-msvc.exe
+          path: muffin-x86_64-pc-windows-msvc.exe
+
+      - name: Upload x86_64-apple-darwin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: muffin-x86_64-apple-darwin
+          path: muffin-x86_64-apple-darwin
+
+      - name: Upload aarch64-apple-darwin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: muffin-aarch64-apple-darwin
+          path: muffin-aarch64-apple-darwin
